@@ -1,0 +1,8 @@
+CC = gcc
+C_FLAGS = -std=c11 -Og -ggdb -Wall -c -fmessage-length=0 -pthread
+T_LIBS = /media/VIETA/Dokumentai/Advanced/workspace/ARM_LIBUKAI/src
+T_INCLUDE = /media/VIETA/Dokumentai/Advanced/workspace/ARM_LIBUKAI/include
+T_DEFINES =
+SRC_DIR = src
+BUILD_DIR = build
+BINARY_NAME = temp_daemon
