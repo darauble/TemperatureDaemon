@@ -4,7 +4,13 @@
 #define WIRE_COUNT_STEP 5
 #define THERMO_COUNT_STEP 5
 
+#include <stdint.h>
 #include <pthread.h>
+
+#include "dallas.h"
+
+#define TEMP_STATUS_OK 1
+#define TEMP_STATUS_FAIL 0
 
 typedef struct thermometer {
     uint8_t address[8];
@@ -18,6 +24,7 @@ typedef struct wire {
     char *device;
     owu_struct_t onewire;
     ow_driver_ptr driver;
+    long last_query;
     int status;
 
     pthread_t tid;

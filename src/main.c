@@ -28,6 +28,7 @@
 #include <getopt.h>
 #include <unistd.h>
 #include <sys/types.h>
+#include <sys/sysinfo.h>
 
 #include <pthread.h>
 
@@ -36,30 +37,43 @@
 #include "dallas.h"
 
 #include "temp_types.h"
+#include "temp_output.h"
+#include "mqtt_output.h"
 
 #define V_MAJOR 0
 #define V_MINOR 1
-
-#define OUTPUT_NAME_LEN 64
-
-#define DEF_OUTPUT_FILE "/tmp/temp_daemon_%d.%s"
-#define DEF_OUTPUT_FORMAT "tsv"
 
 static int opt_daemon = 0;
 static int opt_verbose = 0;
 static int opt_full_scratchpad = 0;
 static long int opt_address_query_period = 300; // How often to retrieve addresses of One Wire devices
 static long int opt_read_period = 60; // How often to read temperatures from Dallas devices
-static char *opt_output_format = DEF_OUTPUT_FORMAT;
-static char output_file[OUTPUT_NAME_LEN];
+// static char *opt_output_format = DEF_OUTPUT_FORMAT;
+
+static int opt_tsv = 0;
+static char *output_tsv = NULL;
+
+static int opt_json = 0;
+static char *output_json = NULL;
+
+static int opt_mqtt = 0;
+static int opt_mqtt_dummy = 0;
+static char *mqtt_server = NULL;
+static int mqtt_port = 1883;
+static char *mqtt_topic = "darauble/temp_daemon";
 
 static wire_t *wires = NULL;
 static int wire_count = 0;
 static int wire_max_count = 0;
 
+static long last_uptime = 0;
+static long current_uptime = 0;
+
 // static thermometer_t *thermometers = NULL;
 // static int thermo_count = 0;
 // static int thermo_max_count = 0;
+
+void usage();
 
 static int init_wire(wire_t *);
 static void release_wires();
@@ -75,20 +89,23 @@ int main(int argc, char **argv)
     __label__ EXIT_MAIN;
     int return_main = 0;
 
-    printf("UART Temperature Daemon is starting up...\n");
-
     static int print_version = 0;
 
     static struct option long_options[] =
     {
         /* These options set a flag. */
         {"version",      no_argument,       &print_version, 1},
+        {"tsv",          required_argument, &opt_tsv, 1},
+        {"json",         required_argument, &opt_json, 1},
+        {"mqtt_server",  required_argument, &opt_mqtt, 1},
+        {"mqtt_port",  required_argument, &opt_mqtt_dummy, 1},
+        {"mqtt_topic",  required_argument, &opt_mqtt_dummy, 1},
         /* These options don’t set a flag.
             We distinguish them by their indices. */
         {"daemon",          no_argument,       0, 'D'},
         {"full_scratchpad", no_argument,       0, 'F'},
         {"device",          required_argument, 0, 'd'},
-        {"output",          required_argument, 0, 'o'},
+        {"help",            no_argument,       0, 'h'},
         {"query_period",    required_argument, 0, 'q'},
         {"read_period",     required_argument, 0, 'r'},
         {"verbose",         no_argument,       0, 'v'},
@@ -108,7 +125,7 @@ int main(int argc, char **argv)
 
     while(1) {
 
-        c = getopt_long(argc, argv, "DFd:o:q:r:v", long_options, &opt_idx);
+        c = getopt_long(argc, argv, "DFd:hq:r:v", long_options, &opt_idx);
 
         if (c < 0) {
             break;
@@ -116,7 +133,6 @@ int main(int argc, char **argv)
 
         switch(c) {
             case 'D':
-                // printf("Daemon mode set\n");
                 opt_daemon = 1;
             break;
 
@@ -125,10 +141,7 @@ int main(int argc, char **argv)
             break;
 
             case 'd':
-                // printf("Device provided: %s\n", optarg);
-                
                 if (wire_count >= wire_max_count) {
-                    // printf("Expanding memory for devices\n");
                     wires = realloc(wires, (wire_max_count + WIRE_COUNT_STEP) * sizeof(wire_t));
                     
                     if (wires == NULL) {
@@ -138,15 +151,18 @@ int main(int argc, char **argv)
                     wire_max_count += WIRE_COUNT_STEP;
                 }
 
+                wires[wire_count].last_query = 0;
+                wires[wire_count].driver = NULL;
+                wires[wire_count].status = TEMP_STATUS_FAIL; // Uninitialized wire
                 wires[wire_count].device = optarg;
                 wires[wire_count].thermometers = NULL;
 
                 wire_count++;
             break;
 
-            case 'o':
-                // printf("Output file provided: %s\n", optarg);
-                strncpy(output_file, optarg, OUTPUT_NAME_LEN);
+            case 'h':
+                usage();
+                goto EXIT_MAIN;
             break;
 
             case 'q':
@@ -169,13 +185,44 @@ int main(int argc, char **argv)
             break;
 
             default:
-                printf("Shit! %d\n", c);
+                // printf("Shit! %d, %d\n", c, opt_idx);
+                switch(opt_idx) {
+                    case 1:
+                        /* TSV output defined */
+                        // printf("TSV file defined: %s\n", optarg);
+                        output_tsv = optarg;
+                    break;
+
+                    case 2:
+                        /* JSON output defined */
+                        // printf("JSON file defined: %s\n", optarg);
+                        output_json = optarg;
+                    break;
+
+                    case 3:
+                        /* MQTT server set */
+                        // printf("MQTT server defined: %s\n", optarg);
+                        mqtt_server = optarg;
+                    break;
+
+                    case 4:
+                        /* MQTT port defined */
+                        mqtt_port = strtol(optarg, NULL, 10);
+                        // printf("MQTT port defined: %d\n", mqtt_port);
+                    break;
+
+                    case 5:
+                        /* MQTT topic set */
+                        // printf("MQTT topic defined: %s\n", optarg);
+                        mqtt_topic = optarg;
+                    break;
+                }
             break;
         }
     }
 
     if (print_version) {
-        printf("UART Temperature Daemon v%d.%d\n", V_MAJOR, V_MINOR);
+        printf("USART Temperature Daemon v%d.%d\n", V_MAJOR, V_MINOR);
         return_main = 0;
         goto EXIT_MAIN;
     }
@@ -188,17 +235,25 @@ int main(int argc, char **argv)
         }
     }
 
-    if (strlen(output_file) == 0) {
-        snprintf(output_file, OUTPUT_NAME_LEN, DEF_OUTPUT_FILE, getpid(), opt_output_format);
-    }
-
     if (opt_verbose) {
-        printf("Output file name: %s\n", output_file);
+        printf("USART Temperature Daemon is starting up...\n");
+
+        if (output_tsv != NULL) {
+            printf("Write output to %s\n", output_tsv);
+        }
+
+        if (output_json != NULL) {
+            printf("Write output to %s\n", output_json);
+        }
+
+        if (mqtt_server != NULL) {
+            printf("Send output to MQTT: %s:%d @ %s\n", mqtt_server, mqtt_port, mqtt_topic);
+        }
 
         printf("USART devices:\n");
         
         for (int i = 0; i < wire_count; i++) {
-            printf("\t%s\n", wires[i].device);
+            printf("  %s\n", wires[i].device);
         }
     }
 
@@ -214,23 +269,54 @@ int main(int argc, char **argv)
         }
     }
 
-    for (int i = 0; i < wire_count; i++) {
-        pthread_create(&wires[i].tid, NULL, temp_thread, (void *) &wires[i]);
+    if (mqtt_server != NULL) {
+        mqtt_open(mqtt_server, mqtt_port, mqtt_topic);
     }
 
-    for (int i = 0; i < wire_count; i++) {
-        pthread_join(wires[i].tid, NULL);
-    }
+    while (1) {
+        struct sysinfo s_info;
+        int err = sysinfo(&s_info);
+        if (err != 0) {
+            perror("Cannot read uptime, daemon cannot run, exiting.\n");
+            goto EXIT_MAIN;
+        }
 
+        current_uptime = s_info.uptime;
+    
+
+        if (current_uptime - last_uptime >= opt_read_period) {
+            for (int i = 0; i < wire_count; i++) {
+                pthread_create(&wires[i].tid, NULL, temp_thread, (void *) &wires[i]);
+            }
+
+            for (int i = 0; i < wire_count; i++) {
+                pthread_join(wires[i].tid, NULL);
+            }
+
+            last_uptime = current_uptime;
+
+            if (opt_tsv) {
+                out_tsv(output_tsv, wires, wire_count);
+            }
+
+            if (opt_json) {
+                out_json(output_json, wires, wire_count);
+            }
+
+            if (mqtt_server != NULL) {
+                mqtt_send(wires, wire_count);
+            }
+        }
+
+        sleep(1);
+    }
 
 EXIT_MAIN:
-    printf("Exit process\n");
+    if (opt_verbose) {
+        printf("Exit temp_daemon\n");
+    }
 
     release_wires();
-
-    // if (thermometers) {
-    //     free(thermometers);
-    // }
 
     if (wires) {
         for (int i = 0; i < wire_count; i++) {
@@ -241,31 +327,68 @@ EXIT_MAIN:
         free(wires);
     }
 
-    unlink(output_file);
+    // unlink(output_file);
 
     return return_main;
 }
 
 void *temp_thread(void *wire_v)
 {
+    __label__ EXIT_THREAD;
+
     wire_t *wire = (wire_t *) wire_v;
 
     if (opt_verbose) {
         printf("Starting thread for device %s\n", wire->device);
     }
 
-    init_wire(wire);
+    int collect_status = 0;
+    
+    if (wire->status == TEMP_STATUS_OK) {
+        if (opt_address_query_period > 0 && (current_uptime - wire->last_query >= opt_address_query_period)) {
+            collect_status = collect_thermometers(wire);
+            wire->last_query = current_uptime;
+        }
+    } else {
+        collect_status = init_wire(wire);
+        
+        if (collect_status != 0) {
+            goto EXIT_THREAD;
+        }
 
-    int collect_status = collect_thermometers(wire);
-
-    if (collect_status != 0) {
-        wire->tret = -1;
-        pthread_exit(&wire->tret);
+        collect_status = collect_thermometers(wire);
+        wire->last_query = current_uptime;
     }
 
-    read_temperatures(wire);
+    if (collect_status != 0) {
+        goto EXIT_THREAD;
+    }
+
+    int read_status = read_temperatures(wire);
+
+    if (read_status != 0) {
+        goto EXIT_THREAD;
+    }
 
     wire->tret = 0;
+
+    pthread_exit(&wire->tret);
+
+    return NULL;
+
+EXIT_THREAD:
+    if (opt_verbose) {
+        printf("Device %s failed, will be reinitialized.\n", wire->device);
+    }
+
+    if (wire->driver != NULL) {
+        release_driver(&wire->driver);
+        wire->driver = NULL;
+    }
+    
+    wire->status = TEMP_STATUS_FAIL;
+    wire->tret = -1;
+
     pthread_exit(&wire->tret);
 
     return NULL;
@@ -279,6 +402,8 @@ static int init_wire(wire_t *wire)
     
     if (drv_status != OW_OK) {
         printf("Failed to init driver for %s\n", wire->device);
+        wire->driver = NULL;
+        return -2;
     }
 
     owu_init(&wire->onewire, wire->driver);
@@ -286,9 +411,12 @@ static int init_wire(wire_t *wire)
     if (drv_status != OW_OK) {
         // Clear all drivers
         release_driver(&wire->driver);
+        wire->driver = NULL;
         
         return -1;
     }
+
+    wire->status = TEMP_STATUS_OK;
 
     return 0;
 }
@@ -298,6 +426,8 @@ static void release_wires()
     for (int i = 0; i < wire_count; i++) {
         if (wires[i].driver != NULL) {
             release_driver(&wires[i].driver);
+            wires[i].driver = NULL;
+            wires[i].status = TEMP_STATUS_FAIL;
         }
     }
 }
@@ -335,6 +465,14 @@ static int collect_thermometers(wire_t *wire) {
 
     if (opt_verbose) {
         printf("... search done.\n");
+    }
+
+    if (wire->thermo_count == 0) {
+        if (opt_verbose) {
+            printf("Could not find thermometers on device %s\n", wire->device);
+        }
+        
+        return -2;
     }
 
     return 0;
@@ -382,13 +520,13 @@ static int read_temperatures(wire_t *wire)
                 printf(": %.4f\n", wire->thermometers[i].temperature);
             }
 
-            wire->thermometers[i].status = 1;
+            wire->thermometers[i].status = TEMP_STATUS_OK;
         } else {
             printf("Error reading thermometer ");
             print_address(wire->thermometers[i].address);
             printf("\n");
 
-            wire->thermometers[i].status = 0;
+            wire->thermometers[i].status = TEMP_STATUS_FAIL;
 
             ret_val = -2;
         }
@@ -421,4 +559,36 @@ static int create_daemon()
     }
 
     return 0;
+}
+
+void usage()
+{
+    printf(
+        "Usage: temp_daemon -d <USART device> [options]\n"
+        "\n"
+        "Main options:\n"
+        "  -D, --daemon                      Run application in daemon mode.\n"
+        "  -d <device>, --device=<device>    Set at least one (or more) devices to read DALLAS temperatures through.\n"
+        "                                    E.g. temp_daemon -d /dev/ttyUSB0\n"
+        "                                    E.g. temp_daemon -d /dev/ttyUSB0 -d /dev/ttyACM1\n"
+        "  -q <sec>, --query_period=<sec>    Set period in seconds to search for DALLAS temperature devices.\n"
+        "                                    Set to 0 (zero) to search for devices only once on startup\n"
+        "                                    Default period is 300 s (5 min.).\n"
+        "  -r <sec>, --read_period=<sec>     Set period in seconds to read temperature and print output.\n"
+        "  -F, --full_scratchpad             Read full scratchpad, all 9 bytes. By default only 2 first bytes are read,\n"
+        "                                    as that's enough to convert the temperature. A bit faster.\n"
+        "\n"
+        "Output options, can be used simultaneously:\n"
+        "  --tsv=<file>                      Write output to TSV file.\n"
+        "  --json=<file>                     Write output to JSON file.\n"
+        "  --mqtt_server=<server>            Send output to MQTT server.\n"
+        "  --mqtt_port=<port>                Set MQTT server's port. Default 1883.\n"
+        "  --mqtt_topic=<topic>              Set parent MQTT topic. Default \"darauble/temp_daemon\"\n"
+        "\n"
+        "Other options:\n"
+        "  -v, --verbose                     Print verbose output of daemon's actions.\n"
+        "  -h, --help                        Print this usage message and exit.\n"
+        "  --version                         Print application's version and exit.\n"
+        "\n"
+    );
 }
