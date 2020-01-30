@@ -1,5 +1,6 @@
 CC = gcc
-C_FLAGS = -std=c11 -Og -ggdb -Wall -c -fmessage-length=0 -pthread -ljansson
+SHARED_LIBS = -ljansson -lpaho-mqtt3as
+C_FLAGS = -std=c11 -Og -ggdb -Wall -c -fmessage-length=0 -pthread $(SHARED_LIBS)
 L_FLAGS = -pthread
 T_LIBS = /media/VIETA/Dokumentai/Advanced/workspace/ARM_LIBUKAI/src
 T_INCLUDE = /media/VIETA/Dokumentai/Advanced/workspace/ARM_LIBUKAI/include
@@ -10,5 +11,6 @@ BUILD_DIR = build
 BINARY_NAME = temp_daemon
 
 INCLUDES = \
-    -I"$(T_INCLUDE)" \
-    -I"$(MQTT_INCLUDE)"
+    -I"$(T_INCLUDE)"
+#     \
+#    -I"$(MQTT_INCLUDE)"

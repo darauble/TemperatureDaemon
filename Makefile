@@ -12,9 +12,10 @@ OBJS = \
 	$(BUILD_DIR)/mqtt_output.o \
 	$(BUILD_DIR)/lib/dallas.o \
 	$(BUILD_DIR)/lib/onewire.o \
-	$(BUILD_DIR)/lib/ow_driver_linux_usart.o \
-	/usr/local/lib/libjansson.a \
-	paho.mqtt.c/build/output/libpaho-mqtt3as.so
+	$(BUILD_DIR)/lib/ow_driver_linux_usart.o
+	
+	#paho.mqtt.c/build/output/libpaho-mqtt3as.so
+	#/usr/local/lib/libjansson.a 
 
 $(BUILD_DIR)/%.o: $(SRC_DIR)/%.c
 	@echo "Building $@"
@@ -26,7 +27,7 @@ $(BUILD_DIR)/lib/%.o: $(T_LIBS)/%.c
 
 $(BINARY_NAME): $(OBJS)
 	@echo "Linking final binary $(BINARY_NAME)"
-	$(CC) $(L_FLAGS) -o $(BINARY_NAME) $(OBJS)
+	$(CC) $(L_FLAGS) -o $(BINARY_NAME) $(OBJS) $(SHARED_LIBS)
 
 
 clean:
