@@ -1,16 +1,9 @@
-CC = gcc
-SHARED_LIBS = -ljansson -lpaho-mqtt3as
-C_FLAGS = -std=c11 -Og -ggdb -Wall -c -fmessage-length=0 -pthread $(SHARED_LIBS)
-L_FLAGS = -pthread
-T_LIBS = /media/VIETA/Dokumentai/Advanced/workspace/ARM_LIBUKAI/src
-T_INCLUDE = /media/VIETA/Dokumentai/Advanced/workspace/ARM_LIBUKAI/include
-MQTT_INCLUDE = paho.mqtt.c/src
-T_DEFINES =
-SRC_DIR = src
-BUILD_DIR = build
-BINARY_NAME = temp_daemon
+## Choose one of the build types below ##
+BUILD = "RELEASE"
+# BUILD = "DEBUG"
 
-INCLUDES = \
-    -I"$(T_INCLUDE)"
-#     \
-#    -I"$(MQTT_INCLUDE)"
+## Set the path to source folder of Dallas and OneWire libraries
+ARM_LIBS = /home/build/ARM_LIBUKAI
+
+## Choose compiler of your needs
+CC = gcc

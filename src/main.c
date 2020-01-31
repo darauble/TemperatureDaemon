@@ -118,7 +118,7 @@ int main(int argc, char **argv)
     wires = malloc(WIRE_COUNT_STEP * sizeof(wire_t));
 
     if (wires == NULL) {
-        perror("Cannot allocate memory for USART devices!\n");
+        fprintf(stderr, "Cannot allocate memory for USART devices!\n");
     }
 
     wire_max_count = WIRE_COUNT_STEP;
@@ -145,7 +145,7 @@ int main(int argc, char **argv)
                     wires = realloc(wires, (wire_max_count + WIRE_COUNT_STEP) * sizeof(wire_t));
                     
                     if (wires == NULL) {
-                        perror("Cannot expand memory for USART devices!\n");
+                        fprintf(stderr, "Cannot expand memory for USART devices!\n");
                     }
 
                     wire_max_count += WIRE_COUNT_STEP;
@@ -263,7 +263,7 @@ int main(int argc, char **argv)
         wires[i].thermo_max = THERMO_COUNT_STEP;
 
         if (wires[i].thermometers == NULL) {
-            perror("Could not allocate memory for thermometers\n");
+            fprintf(stderr, "Could not allocate memory for thermometers\n");
             return_main = -1;
             goto EXIT_MAIN;
         }
@@ -277,7 +277,7 @@ int main(int argc, char **argv)
         struct sysinfo s_info;
         int err = sysinfo(&s_info);
         if (err != 0) {
-            perror("Cannot read uptime, daemon cannot run, exiting.\n");
+            fprintf(stderr, "Cannot read uptime, daemon cannot run, exiting.\n");
             goto EXIT_MAIN;
         }
 
@@ -306,6 +306,8 @@ int main(int argc, char **argv)
             if (mqtt_server != NULL) {
                 mqtt_send(wires, wire_count);
             }
+
+            printf("[%ld] Temperatures read.\n", current_uptime);
         }
 
         sleep(1);
@@ -377,9 +379,7 @@ void *temp_thread(void *wire_v)
     return NULL;
 
 EXIT_THREAD:
-    if (opt_verbose) {
-        printf("Device %s failed, will be reinitialized.\n", wire->device);
-    }
+    fprintf(stderr, "[%ld] Device %s failed, will be reinitialized.\n", current_uptime, wire->device);
 
     if (wire->driver != NULL) {
         release_driver(&wire->driver);
@@ -468,12 +468,12 @@ static int collect_thermometers(wire_t *wire) {
     }
 
     if (wire->thermo_count == 0) {
-        if (opt_verbose) {
-            printf("Could not find thermometers on device %s\n", wire->device);
-        }
+        fprintf(stderr, "[%ld] Could not find thermometers on device %s\n", current_uptime, wire->device);
         
         return -2;
     }
+
+    printf("[%ld] Collected %d thermometers on device %s\n", current_uptime, wire->thermo_count, wire->device);
 
     return 0;
 }
@@ -531,6 +531,8 @@ static int read_temperatures(wire_t *wire)
             ret_val = -2;
         }
     }
+
+    printf("[%ld] Read %d thermometers on device %s\n", current_uptime, wire->thermo_count, wire->device);
 
     return ret_val;
 }

@@ -1,5 +1,31 @@
--include Config.in
+-include Config
 
+#### Compilation flags ####
+FLAGS_RELEASE = -Os
+FLAGS_DEBUG = -Og -ggdb
+
+ifeq ($(BUILD), "RELEASE")
+    C_FLAGS = $(FLAGS_RELEASE)
+else ifeq ($(BUILD), "DEBUG")
+    C_FLAGS = $(FLAGS_DEBUG)
+else
+    $(error "BUILD should be either RELEASE or DEBUG")
+endif
+
+SHARED_LIBS = -lpthread -ljansson -lpaho-mqtt3as
+C_FLAGS += -std=c11 -Wall -c -fmessage-length=0 $(SHARED_LIBS)
+T_LIBS = $(ARM_LIBS)/src
+T_INCLUDE = $(ARM_LIBS)/include
+T_DEFINES =
+SRC_DIR = src
+BUILD_DIR = build
+BINARY_NAME = temp_daemon
+
+INCLUDES = \
+    -I"$(T_INCLUDE)"
+
+
+#### Targets ####
 all: prepare $(BINARY_NAME)
 
 prepare:
@@ -13,9 +39,6 @@ OBJS = \
 	$(BUILD_DIR)/lib/dallas.o \
 	$(BUILD_DIR)/lib/onewire.o \
 	$(BUILD_DIR)/lib/ow_driver_linux_usart.o
-	
-	#paho.mqtt.c/build/output/libpaho-mqtt3as.so
-	#/usr/local/lib/libjansson.a 
 
 $(BUILD_DIR)/%.o: $(SRC_DIR)/%.c
 	@echo "Building $@"
@@ -27,7 +50,10 @@ $(BUILD_DIR)/lib/%.o: $(T_LIBS)/%.c
 
 $(BINARY_NAME): $(OBJS)
 	@echo "Linking final binary $(BINARY_NAME)"
-	$(CC) $(L_FLAGS) -o $(BINARY_NAME) $(OBJS) $(SHARED_LIBS)
+	$(CC) -o $(BINARY_NAME) $(OBJS) $(SHARED_LIBS)
+ifeq ($(BUILD), "RELEASE")
+	strip $(BINARY_NAME)
+endif
 
 
 clean:
