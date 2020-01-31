@@ -89,6 +89,7 @@ void mqtt_send(wire_t *wires, int wire_count)
     response.onFailure = onSendFail;
     response.context = client;
 
+    struct timespec read_wait = { .tv_sec = 0, .tv_nsec = 100000 };
 
     for (int i = 0; i < wire_count; i++) {
         /*** Send the device information ***/
@@ -103,7 +104,7 @@ void mqtt_send(wire_t *wires, int wire_count)
         
         MQTTAsync_sendMessage(client, topic, &msg, &response);
 
-        while (!published);
+        while (!published) nanosleep(&read_wait, NULL);
         published = 0;
 
         for (int j = 0; j < wires[i].thermo_count; j++, t++) {
@@ -128,7 +129,7 @@ void mqtt_send(wire_t *wires, int wire_count)
             
             MQTTAsync_sendMessage(client, topic, &msg, &response);
 
-            while (!published);
+            while (!published) nanosleep(&read_wait, NULL);
             published = 0;
 
             /*** Send the temperature ***/
@@ -147,7 +148,7 @@ void mqtt_send(wire_t *wires, int wire_count)
             
             MQTTAsync_sendMessage(client, topic, &msg, &response);
 
-            while (!published);
+            while (!published) nanosleep(&read_wait, NULL);
             published = 0;
 
             /*** Send the other information ***/
@@ -166,7 +167,7 @@ void mqtt_send(wire_t *wires, int wire_count)
             
             MQTTAsync_sendMessage(client, topic, &msg, &response);
 
-            while (!published);
+            while (!published) nanosleep(&read_wait, NULL);
             published = 0;
         }
     }
