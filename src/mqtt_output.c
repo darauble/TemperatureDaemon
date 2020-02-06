@@ -206,7 +206,7 @@ static void onDisconnect(void* context, MQTTAsync_successData5* response)
 
 static void onSend(void* context, MQTTAsync_successData5* response)
 {
-    //printf("Message sent.\n");
+    // printf("Message sent.\n");
     published = 1;
 }
 
