@@ -1,7 +1,7 @@
 -include Config
 
 #### Compilation flags ####
-FLAGS_RELEASE = -O3
+FLAGS_RELEASE = -O1
 FLAGS_DEBUG = -Og -ggdb
 
 ifeq ($(BUILD), "RELEASE")
