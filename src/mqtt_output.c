@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 #include "dallas.h"
 #include "temp_types.h"
@@ -27,6 +28,7 @@
 static char topic[TOPIC_SIZE];
 static char payload[PAYLOAD_SIZE];
 static char lwt_topic[TOPIC_SIZE];
+static char url[TOPIC_SIZE];
 
 static MQTTAsync client;
 static char *main_topic;
@@ -36,6 +38,7 @@ static void onConnectFailure(void* context, MQTTAsync_successData5* response);
 static void onDisconnect(void* context, MQTTAsync_successData5* response);
 static void onSend(void* context, MQTTAsync_successData5* response);
 static void onSendFail(void* context, MQTTAsync_successData5* response);
+static void connect(char *url);
 
 static volatile int published = 0;
 
@@ -43,17 +46,14 @@ void mqtt_open(char *server, int port, char *topic_base)
 {
     main_topic = topic_base;
 
-    char *url = malloc(TOPIC_SIZE);
-    
-    if (url == NULL) {
-        printf("Cannot allocate memory for MQTT URL, connection will not be established.\n");
-        return;
-    }
-
     snprintf(url, TOPIC_SIZE, SERVER_PATTERN, server, port);
 
+    connect(url);
+}
 
-    int rc = MQTTAsync_create(&client, url, "temp_daemon", MQTTCLIENT_PERSISTENCE_NONE, NULL);
+static void connect(char *lurl)
+{
+    int rc = MQTTAsync_create(&client, lurl, "temp_daemon", MQTTCLIENT_PERSISTENCE_NONE, NULL);
 
     MQTTAsync_willOptions will_opts = MQTTAsync_willOptions_initializer;
     MQTTAsync_connectOptions conn_opts = MQTTAsync_connectOptions_initializer;
@@ -72,8 +72,6 @@ void mqtt_open(char *server, int port, char *topic_base)
     // will_opts.retain = 1;
 
     rc = MQTTAsync_connect(client, &conn_opts);
-
-    free(url);
 }
 
 void mqtt_send(wire_t *wires, int wire_count)
@@ -196,7 +194,10 @@ static void onConnect(void* context, MQTTAsync_successData5* response)
 
 static void onConnectFailure(void* context, MQTTAsync_successData5* response)
 {
-    printf("Failed to connect to MQTT server, messages will not be delivered.\n");
+    printf("Failed to connect to MQTT server, will retry in 30 s.\n");
+    sleep(30);
+    printf("Trying to reconnect\n");
+    connect(url);
 }
 
 static void onDisconnect(void* context, MQTTAsync_successData5* response)
