@@ -82,16 +82,6 @@ static void connect(char *lurl)
 
 void mqtt_send(wire_t *wires, int wire_count)
 {
-    /* Resend LWT with each delivery, as if reconnect occurs, onConnect
-     * is not called repeatedly! */
-    MQTTAsync_message lwt_msg = MQTTAsync_message_initializer;
-    lwt_msg.payload = "online";
-    lwt_msg.payloadlen = strlen(lwt_msg.payload);
-    lwt_msg.qos = 1;
-    lwt_msg.retained = 0;
-
-    MQTTAsync_sendMessage(client, lwt_topic, &lwt_msg, NULL);
-
     int t = 0;
 
     MQTTAsync_message msg = MQTTAsync_message_initializer;
@@ -102,6 +92,13 @@ void mqtt_send(wire_t *wires, int wire_count)
     response.onSuccess = onSend;
     response.onFailure = onSendFail;
     response.context = client;
+
+    /** Resend LWT with each delivery, as if reconnect occurs, onConnect
+     * is not called repeatedly! **/
+    msg.payload = "online";
+    msg.payloadlen = strlen(msg.payload);
+
+    MQTTAsync_sendMessage(client, lwt_topic, &msg, &response);
 
 #ifdef MQTT_WAIT_PUBLISHING
     struct timespec read_wait = { .tv_sec = 0, .tv_nsec = 100000 };
