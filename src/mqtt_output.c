@@ -64,6 +64,9 @@ static void connect(char *lurl)
     snprintf(lwt_topic, TOPIC_SIZE, "%s/lwt", main_topic);
 
     conn_opts.keepAliveInterval = 60;
+    conn_opts.minRetryInterval = 10;
+    conn_opts.maxRetryInterval = 300;
+    conn_opts.automaticReconnect = 1;
     conn_opts.cleansession = 1;
     conn_opts.onSuccess = onConnect;
     conn_opts.onFailure = onConnectFailure;
