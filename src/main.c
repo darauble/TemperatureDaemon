@@ -98,8 +98,8 @@ int main(int argc, char **argv)
         {"tsv",          required_argument, &opt_tsv, 1},
         {"json",         required_argument, &opt_json, 1},
         {"mqtt_server",  required_argument, &opt_mqtt, 1},
-        {"mqtt_port",  required_argument, &opt_mqtt_dummy, 1},
-        {"mqtt_topic",  required_argument, &opt_mqtt_dummy, 1},
+        {"mqtt_port",    required_argument, &opt_mqtt_dummy, 1},
+        {"mqtt_topic",   required_argument, &opt_mqtt_dummy, 1},
         /* These options don’t set a flag.
             We distinguish them by their indices. */
         {"daemon",          no_argument,       0, 'D'},
@@ -577,6 +577,7 @@ void usage()
         "                                    Set to 0 (zero) to search for devices only once on startup\n"
         "                                    Default period is 300 s (5 min.).\n"
         "  -r <sec>, --read_period=<sec>     Set period in seconds to read temperature and print output.\n"
+        "                                    Default period is 60 s (1 min.).\n"
         "  -F, --full_scratchpad             Read full scratchpad, all 9 bytes. By default only 2 first bytes are read,\n"
         "                                    as that's enough to convert the temperature. A bit faster.\n"
         "\n"

@@ -194,10 +194,8 @@ static void onConnect(void* context, MQTTAsync_successData5* response)
 
 static void onConnectFailure(void* context, MQTTAsync_successData5* response)
 {
-    printf("Failed to connect to MQTT server, will retry in 30 s.\n");
-    sleep(30);
-    printf("Trying to reconnect\n");
-    connect(url);
+    printf("Failed to connect to MQTT server.\n");
+    exit(-5);
 }
 
 static void onDisconnect(void* context, MQTTAsync_successData5* response)
