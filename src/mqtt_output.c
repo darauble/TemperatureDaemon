@@ -82,6 +82,16 @@ static void connect(char *lurl)
 
 void mqtt_send(wire_t *wires, int wire_count)
 {
+    /* Resend LWT with each delivery, as if reconnect occurs, onConnect
+     * is not called repeatedly! */
+    MQTTAsync_message lwt_msg = MQTTAsync_message_initializer;
+    lwt_msg.payload = "online";
+    lwt_msg.payloadlen = strlen(msg.payload);
+    lwt_msg.qos = 1;
+    lwt_msg.retained = 0;
+
+    MQTTAsync_sendMessage(client, lwt_topic, &lwt_msg, NULL);
+
     int t = 0;
 
     MQTTAsync_message msg = MQTTAsync_message_initializer;
@@ -212,7 +222,6 @@ static void onConnect(void* context, MQTTAsync_successData* response)
 static void onConnectFailure(void* context, MQTTAsync_failureData* response)
 {
     printf("Failed to connect to MQTT server.\n");
-    exit(-5);
 }
 
 static void onDisconnect(void* context, MQTTAsync_successData* response)
