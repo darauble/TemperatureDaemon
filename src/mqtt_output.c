@@ -86,7 +86,7 @@ void mqtt_send(wire_t *wires, int wire_count)
      * is not called repeatedly! */
     MQTTAsync_message lwt_msg = MQTTAsync_message_initializer;
     lwt_msg.payload = "online";
-    lwt_msg.payloadlen = strlen(msg.payload);
+    lwt_msg.payloadlen = strlen(lwt_msg.payload);
     lwt_msg.qos = 1;
     lwt_msg.retained = 0;
 
