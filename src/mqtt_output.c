@@ -33,14 +33,17 @@ static char url[TOPIC_SIZE];
 static MQTTAsync client;
 static char *main_topic;
 
-static void onConnect(void* context, MQTTAsync_successData5* response);
-static void onConnectFailure(void* context, MQTTAsync_successData5* response);
-static void onDisconnect(void* context, MQTTAsync_successData5* response);
-static void onSend(void* context, MQTTAsync_successData5* response);
-static void onSendFail(void* context, MQTTAsync_successData5* response);
+static void onConnect(void* context, MQTTAsync_successData* response);
+static void onConnectFailure(void* context, MQTTAsync_failureData* response);
+static void onDisconnect(void* context, MQTTAsync_successData* response);
+static void onSend(void* context, MQTTAsync_successData* response);
+static void onSendFail(void* context, MQTTAsync_failureData* response);
 static void connect(char *url);
+static void beautify_float_str(char *str);
 
+#ifdef MQTT_WAIT_PUBLISHING
 static volatile int published = 0;
+#endif
 
 void mqtt_open(char *server, int port, char *topic_base)
 {
@@ -53,7 +56,7 @@ void mqtt_open(char *server, int port, char *topic_base)
 
 static void connect(char *lurl)
 {
-    int rc = MQTTAsync_create(&client, lurl, "temp_daemon", MQTTCLIENT_PERSISTENCE_NONE, NULL);
+    MQTTAsync_create(&client, lurl, "temp_daemon", MQTTCLIENT_PERSISTENCE_NONE, NULL);
 
     MQTTAsync_willOptions will_opts = MQTTAsync_willOptions_initializer;
     MQTTAsync_connectOptions conn_opts = MQTTAsync_connectOptions_initializer;
@@ -71,7 +74,7 @@ static void connect(char *lurl)
     will_opts.message = "offline";
     // will_opts.retain = 1;
 
-    rc = MQTTAsync_connect(client, &conn_opts);
+    MQTTAsync_connect(client, &conn_opts);
 }
 
 void mqtt_send(wire_t *wires, int wire_count)
@@ -87,7 +90,9 @@ void mqtt_send(wire_t *wires, int wire_count)
     response.onFailure = onSendFail;
     response.context = client;
 
+#ifdef MQTT_WAIT_PUBLISHING
     struct timespec read_wait = { .tv_sec = 0, .tv_nsec = 100000 };
+#endif
 
     for (int i = 0; i < wire_count; i++) {
         /*** Send the device information ***/
@@ -102,8 +107,10 @@ void mqtt_send(wire_t *wires, int wire_count)
         
         MQTTAsync_sendMessage(client, topic, &msg, &response);
 
+#ifdef MQTT_WAIT_PUBLISHING
         while (!published) nanosleep(&read_wait, NULL);
         published = 0;
+#endif
 
         for (int j = 0; j < wires[i].thermo_count; j++, t++) {
             
@@ -127,8 +134,10 @@ void mqtt_send(wire_t *wires, int wire_count)
             
             MQTTAsync_sendMessage(client, topic, &msg, &response);
 
+#ifdef MQTT_WAIT_PUBLISHING
             while (!published) nanosleep(&read_wait, NULL);
             published = 0;
+#endif
 
             /*** Send the temperature ***/
             snprintf(topic, TOPIC_SIZE, TEMP_TEMPERATURE_TOPIC,
@@ -141,13 +150,17 @@ void mqtt_send(wire_t *wires, int wire_count)
                 wires[i].thermometers[j].temperature
             );
 
+            beautify_float_str(payload);
+
             msg.payload = payload;
             msg.payloadlen = strlen(payload);
             
             MQTTAsync_sendMessage(client, topic, &msg, &response);
 
+#ifdef MQTT_WAIT_PUBLISHING
             while (!published) nanosleep(&read_wait, NULL);
             published = 0;
+#endif
 
             /*** Send the other information ***/
             snprintf(topic, TOPIC_SIZE, TEMP_INFO_TOPIC,
@@ -164,9 +177,10 @@ void mqtt_send(wire_t *wires, int wire_count)
             msg.payloadlen = strlen(payload);
             
             MQTTAsync_sendMessage(client, topic, &msg, &response);
-
+#ifdef MQTT_WAIT_PUBLISHING
             while (!published) nanosleep(&read_wait, NULL);
             published = 0;
+#endif
         }
     }
 }
@@ -176,10 +190,10 @@ void mqtt_close()
     MQTTAsync_disconnectOptions opts = MQTTAsync_disconnectOptions_initializer;
     opts.onSuccess = onDisconnect;
     opts.context = client;
-    int rc = MQTTAsync_disconnect(client, &opts);
+    MQTTAsync_disconnect(client, &opts);
 }
 
-static void onConnect(void* context, MQTTAsync_successData5* response)
+static void onConnect(void* context, MQTTAsync_successData* response)
 {
     printf("Connected to MQTT server\n");
 
@@ -192,25 +206,45 @@ static void onConnect(void* context, MQTTAsync_successData5* response)
     MQTTAsync_sendMessage(client, lwt_topic, &msg, NULL);
 }
 
-static void onConnectFailure(void* context, MQTTAsync_successData5* response)
+static void onConnectFailure(void* context, MQTTAsync_failureData* response)
 {
     printf("Failed to connect to MQTT server.\n");
     exit(-5);
 }
 
-static void onDisconnect(void* context, MQTTAsync_successData5* response)
+static void onDisconnect(void* context, MQTTAsync_successData* response)
 {
     MQTTAsync_destroy(&client);
 }
 
-static void onSend(void* context, MQTTAsync_successData5* response)
+static void onSend(void* context, MQTTAsync_successData* response)
 {
     // printf("Message sent.\n");
+#ifdef MQTT_WAIT_PUBLISHING
     published = 1;
+#endif
 }
 
-static void onSendFail(void* context, MQTTAsync_successData5* response)
+static void onSendFail(void* context, MQTTAsync_failureData* response)
 {
-    printf("Message sending failed.\n");
+    fprintf(stderr, "Message sending failed.\n");
+#ifdef MQTT_WAIT_PUBLISHING
     published = 1;
+#endif
+}
+
+static void beautify_float_str(char *str)
+{
+    uint16_t l = strlen(str);
+    int i;
+    for (i = l-1; i >= 0; i--) {
+        if (str[i] == '0') {
+            str[i] = 0;
+        } else if (str[i] == '.') {
+            str[i] = 0;
+            break;
+        } else {
+            break;
+        }
+    }
 }

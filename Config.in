@@ -3,7 +3,15 @@ BUILD = "RELEASE"
 # BUILD = "DEBUG"
 
 ## Set the path to source folder of Dallas and OneWire libraries
-ARM_LIBS = /home/build/ARM_LIBUKAI
+ARM_LIBS = /home/pi/ARM_LIBUKAI
 
 ## Choose compiler of your needs
 CC = gcc
+
+
+## Add possible defines
+# Required with `-std=c99`
+T_DEFINES = -D_POSIX_C_SOURCE=199309L
+
+# If waiting for published async MQTT message is needed
+# T_DEFINES += -DMQTT_WAIT_PUBLISHING

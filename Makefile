@@ -16,7 +16,6 @@ SHARED_LIBS = -lpthread -ljansson -lpaho-mqtt3as
 C_FLAGS += -std=c11 -Wall -c -fmessage-length=0 $(SHARED_LIBS)
 T_LIBS = $(ARM_LIBS)/src
 T_INCLUDE = $(ARM_LIBS)/include
-T_DEFINES =
 SRC_DIR = src
 BUILD_DIR = build
 BINARY_NAME = temp_daemon
@@ -42,11 +41,11 @@ OBJS = \
 
 $(BUILD_DIR)/%.o: $(SRC_DIR)/%.c
 	@echo "Building $@"
-	$(CC) $(INCLUDES)  $(C_FLAGS) -MMD -MP -MF"$(@:%.o=%.d)" -MT"$(@)" -o "$@" "$<"
+	$(CC) $(INCLUDES)  $(C_FLAGS) $(T_DEFINES) -MMD -MP -MF"$(@:%.o=%.d)" -MT"$(@)" -o "$@" "$<"
 
 $(BUILD_DIR)/lib/%.o: $(T_LIBS)/%.c
 	@echo "Building library $@"
-	$(CC) $(INCLUDES) $(C_FLAGS) -MMD -MP -MF"$(@:%.o=%.d)" -MT"$(@)" -o "$@" "$<"
+	$(CC) $(INCLUDES) $(C_FLAGS) $(T_DEFINES) -MMD -MP -MF"$(@:%.o=%.d)" -MT"$(@)" -o "$@" "$<"
 
 $(BINARY_NAME): $(OBJS)
 	@echo "Linking final binary $(BINARY_NAME)"
