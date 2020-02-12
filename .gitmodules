@@ -1,0 +1,3 @@
+[submodule "DallasOneWire"]
+	path = DallasOneWire
+	url = https://github.com/darauble/DallasOneWire

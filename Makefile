@@ -14,38 +14,38 @@ endif
 
 SHARED_LIBS = -lpthread -ljansson -lpaho-mqtt3as
 C_FLAGS += -std=c11 -Wall -c -fmessage-length=0 $(SHARED_LIBS)
-T_LIBS = $(ARM_LIBS)/src
-T_INCLUDE = $(ARM_LIBS)/include
+
+OW_LIBS = DallasOneWire
+
 SRC_DIR = src
 BUILD_DIR = build
 BINARY_NAME = temp_daemon
 
 INCLUDES = \
-    -I"$(T_INCLUDE)"
+    -I"$(OW_LIBS)/dallas" \
+    -I"$(OW_LIBS)/drivers" \
+    -I"$(OW_LIBS)/onewire"
 
 
 #### Targets ####
 all: prepare $(BINARY_NAME)
 
 prepare:
-	mkdir -p $(BUILD_DIR)/lib
+	mkdir -p $(BUILD_DIR)
 
 OBJS = \
-	$(BUILD_DIR)/main.o \
-	$(BUILD_DIR)/temp_output_tsv.o \
-	$(BUILD_DIR)/temp_output_json.o \
-	$(BUILD_DIR)/mqtt_output.o \
-	$(BUILD_DIR)/lib/dallas.o \
-	$(BUILD_DIR)/lib/onewire.o \
-	$(BUILD_DIR)/lib/ow_driver_linux_usart.o
+	$(BUILD_DIR)/$(SRC_DIR)/main.o \
+	$(BUILD_DIR)/$(SRC_DIR)/temp_output_tsv.o \
+	$(BUILD_DIR)/$(SRC_DIR)/temp_output_json.o \
+	$(BUILD_DIR)/$(SRC_DIR)/mqtt_output.o \
+	$(BUILD_DIR)/$(OW_LIBS)/dallas/dallas.o \
+	$(BUILD_DIR)/$(OW_LIBS)/onewire/onewire.o \
+	$(BUILD_DIR)/$(OW_LIBS)/drivers/ow_driver_linux_usart.o
 
-$(BUILD_DIR)/%.o: $(SRC_DIR)/%.c
-	@echo "Building $@"
+
+$(OBJS): $(BUILD_DIR)/%.o: %.c
+	mkdir -p $(@D)
 	$(CC) $(INCLUDES)  $(C_FLAGS) $(T_DEFINES) -MMD -MP -MF"$(@:%.o=%.d)" -MT"$(@)" -o "$@" "$<"
-
-$(BUILD_DIR)/lib/%.o: $(T_LIBS)/%.c
-	@echo "Building library $@"
-	$(CC) $(INCLUDES) $(C_FLAGS) $(T_DEFINES) -MMD -MP -MF"$(@:%.o=%.d)" -MT"$(@)" -o "$@" "$<"
 
 $(BINARY_NAME): $(OBJS)
 	@echo "Linking final binary $(BINARY_NAME)"

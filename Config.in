@@ -2,12 +2,8 @@
 BUILD = "RELEASE"
 # BUILD = "DEBUG"
 
-## Set the path to source folder of Dallas and OneWire libraries
-ARM_LIBS = /home/pi/ARM_LIBUKAI
-
 ## Choose compiler of your needs
 CC = gcc
-
 
 ## Add possible defines
 # Required with `-std=c99`
