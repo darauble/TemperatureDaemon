@@ -6,7 +6,7 @@ Wants=network-online.target
 [Service]
 Type=simple
 User=pi
-ExecStart=/home/pi/TEMP_DAEMON/temp_dameon -q 3600 -d /dev/ttyUSB0 -d /dev/ttyUSB1 --mqtt_server=192.168.5.3 --mqtt_topic=darauble
+ExecStart=/home/pi/TEMP_DAEMON/temp_dameon -q 3600 -d /dev/ttyUSB0 -d /dev/ttyUSB1 --mqtt_server=192.168.5.3
 Restart=on-failure
 RestartSec=60
 
