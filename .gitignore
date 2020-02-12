@@ -1,5 +1,4 @@
 Config
 build
 jansson*
-paho.mqtt.c
 temp_daemon

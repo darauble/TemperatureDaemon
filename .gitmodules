@@ -1,3 +1,6 @@
 [submodule "DallasOneWire"]
 	path = DallasOneWire
 	url = https://github.com/darauble/DallasOneWire
+[submodule "paho.mqtt.c"]
+	path = paho.mqtt.c
+	url = https://github.com/eclipse/paho.mqtt.c
