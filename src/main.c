@@ -1,16 +1,14 @@
 /*
  * The source of the UART Temperature Daemon designed around OneWire
- * "driver" of Linux USART adapter (e.g. FT232 or similar).
+ * "driver" of Linux USART adapter (e.g. FT232, CH304, PL2303 or similar).
  *
  * main.c
  *
  *  Created on: Jan 23, 2020
  *      Author: Darau, blė
  *
- *  Credits: Chi Zhang aka dword1511
- *
- *  This file is a part of personal use libraries developed to be used
- *  on various microcontrollers and Linux devices.
+ *  This file is a part of personal use utilities developed to be used
+ *  on various Linux devices.
  *
  *  This program is free software: you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -43,12 +41,12 @@
 #define V_MAJOR 0
 #define V_MINOR 1
 
+/* Default options */
 static int opt_daemon = 0;
 static int opt_verbose = 0;
 static int opt_full_scratchpad = 0;
 static long int opt_address_query_period = 300; // How often to retrieve addresses of One Wire devices
 static long int opt_read_period = 60; // How often to read temperatures from Dallas devices
-// static char *opt_output_format = DEF_OUTPUT_FORMAT;
 
 static int opt_tsv = 0;
 static char *output_tsv = NULL;
@@ -62,17 +60,17 @@ static char *mqtt_server = NULL;
 static int mqtt_port = 1883;
 static char *mqtt_topic = "darauble/temp_daemon";
 
+/* One Wire structures */
 static wire_t *wires = NULL;
 static int wire_count = 0;
 static int wire_max_count = 0;
 
+/* Timers */
 static long last_uptime = 0;
 static long current_uptime = 0;
 
-// static thermometer_t *thermometers = NULL;
-// static int thermo_count = 0;
-// static int thermo_max_count = 0;
 
+/* Function headers */
 void usage();
 
 static int init_wire(wire_t *);
@@ -179,41 +177,34 @@ int main(int argc, char **argv)
             break;
 
             case '?':
-                printf("Shit?\n");
                 return_main = -1;
                 goto EXIT_MAIN;
             break;
 
             default:
-                // printf("Shit! %d, %d\n", c, opt_idx);
                 switch(opt_idx) {
                     case 1:
                         /* TSV output defined */
-                        // printf("TSV file defined: %s\n", optarg);
                         output_tsv = optarg;
                     break;
 
                     case 2:
                         /* JSON output defined */
-                        // printf("JSON file defined: %s\n", optarg);
                         output_json = optarg;
                     break;
 
                     case 3:
                         /* MQTT server set */
-                        // printf("MQTT server defined: %s\n", optarg);
                         mqtt_server = optarg;
                     break;
 
                     case 4:
                         /* MQTT port defined */
                         mqtt_port = strtol(optarg, NULL, 10);
-                        // printf("MQTT port defined: %d\n", mqtt_port);
                     break;
 
                     case 5:
                         /* MQTT topic set */
-                        // printf("MQTT topic defined: %s\n", optarg);
                         mqtt_topic = optarg;
                     break;
                 }
@@ -224,6 +215,18 @@ int main(int argc, char **argv)
     if (print_version) {
         printf("USART Temperature Daemon v%d.%d\n", V_MAJOR, V_MINOR);
         return_main = 0;
+        goto EXIT_MAIN;
+    }
+
+    if (wire_count == 0) {
+        fprintf(stderr, "No USART devices given, exitting.\n");
+        return_main = -2;
+        goto EXIT_MAIN;
+    }
+
+    if (output_tsv == NULL && output_json == NULL && mqtt_server == NULL) {
+        fprintf(stderr, "Provide at least one output: TSV, JSON or MQTT.\n");
+        return_main = -3;
         goto EXIT_MAIN;
     }
 
@@ -263,7 +266,7 @@ int main(int argc, char **argv)
         wires[i].thermo_max = THERMO_COUNT_STEP;
 
         if (wires[i].thermometers == NULL) {
-            fprintf(stderr, "Could not allocate memory for thermometers\n");
+            fprintf(stderr, "Could not allocate memory for sensors\n");
             return_main = -1;
             goto EXIT_MAIN;
         }
@@ -328,8 +331,6 @@ EXIT_MAIN:
         }
         free(wires);
     }
-
-    // unlink(output_file);
 
     return return_main;
 }
@@ -409,7 +410,7 @@ static int init_wire(wire_t *wire)
     owu_init(&wire->onewire, wire->driver);
 
     if (drv_status != OW_OK) {
-        // Clear all drivers
+        // Clear the driver
         release_driver(&wire->driver);
         wire->driver = NULL;
         
@@ -436,14 +437,14 @@ static int collect_thermometers(wire_t *wire) {
     wire->thermo_count = 0;
 
     if (opt_verbose) {
-        printf("Startng search of thermometers...\n");
+        printf("Starting search of sensors...\n");
     }
 
     owu_reset_search(&wire->onewire);
 
     if (wire->thermo_count >= wire->thermo_max) {
         if (opt_verbose) {
-            printf("Expanding memory for more thermometers\n");
+            printf("Expanding memory for more sensors\n");
         }
 
         wire->thermometers = realloc(wire->thermometers, (wire->thermo_max + THERMO_COUNT_STEP) * sizeof(thermometer_t));
@@ -468,12 +469,12 @@ static int collect_thermometers(wire_t *wire) {
     }
 
     if (wire->thermo_count == 0) {
-        fprintf(stderr, "[%ld] Could not find thermometers on device %s\n", current_uptime, wire->device);
+        fprintf(stderr, "[%ld] Could not find sensors on device %s\n", current_uptime, wire->device);
         
         return -2;
     }
 
-    printf("[%ld] Collected %d thermometers on device %s\n", current_uptime, wire->thermo_count, wire->device);
+    printf("[%ld] Collected %d sensors on device %s\n", current_uptime, wire->thermo_count, wire->device);
 
     return 0;
 }
@@ -486,7 +487,7 @@ static int read_temperatures(wire_t *wire)
     int convert_status = ds_convert_all(&wire->onewire);
 
     if (convert_status != OW_OK) {
-        printf("Convert: no devices on %s\n", wires->device);
+        printf("Convert: no sensors @ %s\n", wires->device);
         return -1;
     }
 
@@ -517,12 +518,12 @@ static int read_temperatures(wire_t *wire)
             if (opt_verbose) {
                 printf("Temperature @ ");
                 print_address(wire->thermometers[i].address);
-                printf(": %.4f\n", wire->thermometers[i].temperature);
+                printf(": %.5f\n", wire->thermometers[i].temperature);
             }
 
             wire->thermometers[i].status = TEMP_STATUS_OK;
         } else {
-            printf("Error reading thermometer ");
+            printf("Error reading sensor ");
             print_address(wire->thermometers[i].address);
             printf("\n");
 
@@ -532,7 +533,7 @@ static int read_temperatures(wire_t *wire)
         }
     }
 
-    printf("[%ld] Read %d thermometers on device %s\n", current_uptime, wire->thermo_count, wire->device);
+    printf("[%ld] Read %d sensors on device %s\n", current_uptime, wire->thermo_count, wire->device);
 
     return ret_val;
 }
@@ -573,8 +574,8 @@ void usage()
         "  -d <device>, --device=<device>    Set at least one (or more) devices to read DALLAS temperatures through.\n"
         "                                    E.g. temp_daemon -d /dev/ttyUSB0\n"
         "                                    E.g. temp_daemon -d /dev/ttyUSB0 -d /dev/ttyACM1\n"
-        "  -q <sec>, --query_period=<sec>    Set period in seconds to search for DALLAS temperature devices.\n"
-        "                                    Set to 0 (zero) to search for devices only once on startup\n"
+        "  -q <sec>, --query_period=<sec>    Set period in seconds to search for DALLAS temperature sensors.\n"
+        "                                    Set to 0 (zero) to search for sensors only once on startup\n"
         "                                    Default period is 300 s (5 min.).\n"
         "  -r <sec>, --read_period=<sec>     Set period in seconds to read temperature and print output.\n"
         "                                    Default period is 60 s (1 min.).\n"

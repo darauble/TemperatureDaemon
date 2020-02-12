@@ -27,12 +27,6 @@ INCLUDES = \
     -I"$(OW_LIBS)/onewire"
 
 
-#### Targets ####
-all: prepare $(BINARY_NAME)
-
-prepare:
-	mkdir -p $(BUILD_DIR)
-
 OBJS = \
 	$(BUILD_DIR)/$(SRC_DIR)/main.o \
 	$(BUILD_DIR)/$(SRC_DIR)/temp_output_tsv.o \
@@ -42,6 +36,10 @@ OBJS = \
 	$(BUILD_DIR)/$(OW_LIBS)/onewire/onewire.o \
 	$(BUILD_DIR)/$(OW_LIBS)/drivers/ow_driver_linux_usart.o
 
+#### Targets ####
+.PHONY: all clean
+
+all: $(BINARY_NAME)
 
 $(OBJS): $(BUILD_DIR)/%.o: %.c
 	mkdir -p $(@D)
@@ -53,7 +51,6 @@ $(BINARY_NAME): $(OBJS)
 ifeq ($(BUILD), "RELEASE")
 	strip $(BINARY_NAME)
 endif
-
 
 clean:
 	rm -rf $(BUILD_DIR) $(BINARY_NAME)
