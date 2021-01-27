@@ -28,6 +28,7 @@ int out_json(char *file_name, wire_t *wires, int wire_count)
 
             json_object_set_new(jthermo, "num", json_integer(t));
             json_object_set_new(jthermo, "device_num", json_integer(i));
+            json_object_set_new(jthermo, "status", json_integer(wires[i].thermometers[j].status));
 
             uint8_t *addr = wires[i].thermometers[j].address;
             uint8_t *scr = wires[i].thermometers[j].scratchpad;
@@ -40,14 +41,16 @@ int out_json(char *file_name, wire_t *wires, int wire_count)
 
             json_object_set_new(jthermo, "address", json_string(output));
 
-            snprintf(output, BUF_SIZE,
-                "%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X",
-                scr[SCR_L], scr[SCR_H], scr[SCR_HI_ALARM], scr[SCR_LO_ALARM], scr[SCR_CFG],
-                scr[SCR_FFH], scr[SCR_RESERVED], scr[SCR_10H], scr[SCR_CRC]
-            );
+            if (wires[i].thermometers[j].status != TEMP_STATUS_FAIL) {
+                snprintf(output, BUF_SIZE,
+                    "%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X",
+                    scr[SCR_L], scr[SCR_H], scr[SCR_HI_ALARM], scr[SCR_LO_ALARM], scr[SCR_CFG],
+                    scr[SCR_FFH], scr[SCR_RESERVED], scr[SCR_10H], scr[SCR_CRC]
+                );
 
-            json_object_set_new(jthermo, "scratchpad", json_string(output));
-            json_object_set_new(jthermo, "temperature", json_real(wires[i].thermometers[j].temperature));
+                json_object_set_new(jthermo, "scratchpad", json_string(output));
+                json_object_set_new(jthermo, "temperature", json_real(wires[i].thermometers[j].temperature));
+            }
 
             json_array_append_new(jtemp, jthermo);
         }

@@ -45,6 +45,8 @@
 static int opt_daemon = 0;
 static int opt_verbose = 0;
 static int opt_full_scratchpad = 0;
+static int opt_median = 0;
+static int opt_check_crc = 0;
 static long int opt_address_query_period = 300; // How often to retrieve addresses of One Wire devices
 static long int opt_read_period = 60; // How often to read temperatures from Dallas devices
 
@@ -102,6 +104,8 @@ int main(int argc, char **argv)
             We distinguish them by their indices. */
         {"daemon",          no_argument,       0, 'D'},
         {"full_scratchpad", no_argument,       0, 'F'},
+        {"crc8",            no_argument,       0, 'c'},
+        {"median",          no_argument,       0, 'm'},
         {"device",          required_argument, 0, 'd'},
         {"help",            no_argument,       0, 'h'},
         {"query_period",    required_argument, 0, 'q'},
@@ -123,7 +127,7 @@ int main(int argc, char **argv)
 
     while(1) {
 
-        c = getopt_long(argc, argv, "DFd:hq:r:v", long_options, &opt_idx);
+        c = getopt_long(argc, argv, "DFcmd:hq:r:v", long_options, &opt_idx);
 
         if (c < 0) {
             break;
@@ -136,6 +140,15 @@ int main(int argc, char **argv)
 
             case 'F':
                 opt_full_scratchpad = 1;
+            break;
+
+            case 'c':
+                opt_full_scratchpad = 1;
+                opt_check_crc = 1;
+            break;
+
+            case 'm':
+                opt_median = 1;
             break;
 
             case 'd':
@@ -442,18 +455,6 @@ static int collect_thermometers(wire_t *wire) {
 
     owu_reset_search(&wire->onewire);
 
-    if (wire->thermo_count >= wire->thermo_max) {
-        if (opt_verbose) {
-            printf("Expanding memory for more sensors\n");
-        }
-
-        wire->thermometers = realloc(wire->thermometers, (wire->thermo_max + THERMO_COUNT_STEP) * sizeof(thermometer_t));
-
-        if (wire->thermometers == NULL) {
-            return -1;
-        }
-    }
-
     while(owu_search(&wire->onewire, wire->thermometers[wire->thermo_count].address)) {
         if (opt_verbose) {
             printf("  Found ");
@@ -462,6 +463,20 @@ static int collect_thermometers(wire_t *wire) {
         }
 
         wire->thermo_count++;
+     
+        if (wire->thermo_count >= wire->thermo_max) {
+            if (opt_verbose) {
+                printf("Expanding memory for more sensors\n");
+            }
+
+            wire->thermometers = realloc(wire->thermometers, (wire->thermo_max + THERMO_COUNT_STEP) * sizeof(thermometer_t));
+
+            if (wire->thermometers == NULL) {
+                return -1;
+            }
+
+            wire->thermo_max += THERMO_COUNT_STEP;
+        }
     }
 
     if (opt_verbose) {
@@ -496,14 +511,36 @@ static int read_temperatures(wire_t *wire)
     int ret_val = 0;
 
     for (int i = 0; i < wire->thermo_count; i++) {
-        int read_status;
+        int read_status = OW_ERR;
 
         if (opt_full_scratchpad) {
-            read_status = ds_read_scratchpad(
-                &wire->onewire, 
-                wire->thermometers[i].address,
-                wire->thermometers[i].scratchpad
-            );
+
+            uint8_t c;
+
+            for (c = 0; c < ((opt_check_crc) ? 3 : 1); c++) {
+                read_status = ds_read_scratchpad(
+                    &wire->onewire, 
+                    wire->thermometers[i].address,
+                    wire->thermometers[i].scratchpad
+                );
+
+                if (opt_check_crc) {
+                    uint32_t crc8 = owu_crc8(wire->thermometers[i].scratchpad, SCR_CRC);
+                    
+                    if ((uint8_t) crc8 == wire->thermometers[i].scratchpad[SCR_CRC]) {
+                        if (opt_verbose) {
+                            printf("CRC check OK\n");
+                        }
+                        
+                        break;
+                    } else {
+                        fprintf(stderr, "Encountered crc error: %d, %d, read status: %d\n",
+                            crc8, wire->thermometers[i].scratchpad[SCR_CRC], read_status);
+                        
+                        read_status = OW_ERR; // A workaround to indicate reading failure.
+                    }
+                }
+            }
         } else {
             read_status = ds_read_temp_only(
                 &wire->onewire, 
@@ -574,6 +611,12 @@ void usage()
         "  -d <device>, --device=<device>    Set at least one (or more) devices to read DALLAS temperatures through.\n"
         "                                    E.g. temp_daemon -d /dev/ttyUSB0\n"
         "                                    E.g. temp_daemon -d /dev/ttyUSB0 -d /dev/ttyACM1\n"
+        "  -c, --crc8                        Check CRC8 of the sensor. Automatically enables full scratchpad reading.\n"
+        "                                    Useful in very noisy environments. Retries reading 3 times, then leaves it.\n"
+        "  -m, --median                      Enable conversion and reading three times in a row and taking the median\n"
+        "                                    value for reporting. Useful in very noisy environments and helps with to\n"
+        "                                    to avoid erroneous reading of highly differing values. However, takes\n"
+        "                                    longer time for conversion (~3 s vs. ~1 s)."
         "  -q <sec>, --query_period=<sec>    Set period in seconds to search for DALLAS temperature sensors.\n"
         "                                    Set to 0 (zero) to search for sensors only once on startup\n"
         "                                    Default period is 300 s (5 min.).\n"
